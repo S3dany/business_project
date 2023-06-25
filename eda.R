@@ -1,6 +1,7 @@
-#install.packages("readxl")
-#install.packages("lubridate")
-# remember to activate them
+install.packages("readxl")
+library(readxl)
+install.packages("lubridate")
+library(lubridate)
 
 # Possible correlations:
 # NOMINAL GDP to Inflation 
@@ -100,7 +101,7 @@ end_date <- as.Date(end_date, origin = "1970-01-01")
 
 
 years_ago <- 10
-start_date <- as.Date(max_date - years(years_ago))
+start_date <- as.Date(end_date - years(years_ago))
 
 
 
