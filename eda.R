@@ -100,7 +100,7 @@ end_date <- calculate_end_date(data_frames_temp)
 end_date <- as.Date(end_date, origin = "1970-01-01")
 
 
-years_ago <- 10
+years_ago <- 20
 start_date <- as.Date(end_date - years(years_ago))
 
 
@@ -261,12 +261,6 @@ calculate_plot_vif(subset(df, select = -c(DATE)), response_var)
 
 library(forecast)
 
-########### ACF PACF ##############
-
-Acf(subset(df, select = response_var))
-Pacf(subset(df, select = response_var))
-# Every price is heavily dependent on the one next to it, lag = 1
-
 
 ########### LM TREND+SEASON ###########
 # We convert the NASDAQ index to a timeseries data
@@ -274,27 +268,30 @@ Pacf(subset(df, select = response_var))
 df$DATE <- as.Date(df$DATE)
 # Sort dataframe by date
 df <- df[order(df$DATE),]
-# Create the time series object
-nasdaq_price_ts <- ts(df$nasdaq_PRICE, start=c(year(min(df$DATE)), month(min(df$DATE))), frequency=12)
 
-plot(nasdaq_price_ts, main="NASDAQ Price over Time", ylab="Price", xlab="Time")
+# Create the time series object
+nasdaq_ts <- ts(df$nasdaq_PRICE, start=c(year(min(df$DATE)), month(min(df$DATE))), frequency=12)
+
+plot(nasdaq_ts, main="NASDAQ Price over Time", ylab="Price", xlab="Time")
 
 # Decompose the time series into its trend, seasonal, and random components
-nasdaq_price_ts_decomposed <- stl(nasdaq_price_ts, s.window="periodic")
+nasdaq_ts_decomposed <- stl(nasdaq_ts, s.window="periodic")
 # Four panels: 
 # 1 the original series
 # 2 the estimated trend component
 # 3 the estimated seasonal component
 # 4 the estimated irregular component
-plot(nasdaq_price_ts_decomposed)
+plot(nasdaq_ts_decomposed)
+# Seems like there is seasonality,
+# since there is a repeating pattern with constant amplitude and frequency
 
 # Fit the Time Series Linear Model
-model <- tslm(nasdaq_price_ts ~ trend + season)
+model <- tslm(nasdaq_ts ~ trend + season)
 summary(model)
 
 # Plot LM predictions
 fit<- fitted(model)
-plot(nasdaq_price_ts, main="NASDAQ Price over Time", ylab="Price", xlab="Time")
+plot(nasdaq_ts, main="NASDAQ Price over Time", ylab="Price", xlab="Time")
 lines(fitted(model), col=2)
 
 # Plot forecast
@@ -310,11 +307,72 @@ Acf(res)
 
 # The Durbin-Watson test statistic ranges from 0 to 4. 
 # A value of 2 means there is no autocorrelation in the sample, values < 2 suggest positive autocorrelation, and values > 2 suggest negative autocorrelation.
-
-dw<- dwtest(model, alt="two.sided")
-
+dwtest(model, alt="two.sided")
 
 ########### ARIMA #############
+Acf(nasdaq_ts)
+# Gradual decrease in ACF indicates that the series is stationary and thus needs differencing
+Pacf(nasdaq_ts)
+
+# AR(p) = 1 since in PACF the cut off is at 1
+# Every price is heavily dependent on the one next to it, lag = 1
+
+# MA(q) unknown since all lags overflow the confidence interval.
+# We thus need to do differencing i.e. remove from each entry, the previous entry
+
+diff_nasdaq <- diff(nasdaq_ts)
+plot(diff_nasdaq)
+
+Acf(diff_nasdaq)
+Pacf(diff_nasdaq)
+# AR(p) = 1
+# I(d) = 1
+# MA(q) = 1
+
+arima_model <- Arima(nasdaq_ts, order=c(1,1,1))
+summary(arima_model)
+
+fit_arima <- fitted(arima_model)
+
+plot(nasdaq_ts)
+lines(fit_arima, col=2)
+
+forecast_arima <- forecast(arima_model)
+plot(forecast_arima)
+
+residuals_arima <- residuals(arima_model)
+tsdisplay(residuals_arima) 
+
+
+# Auto ARIMA
+
+# no seasonality
+arima_auto <- auto.arima(nasdaq_ts, seasonal = FALSE)
+summary(fit)
+
+# Seasonality seems to be 12
+
+fit_auto_arima <- fitted(fit)
+
+plot(nasdaq_ts)
+lines(fit_auto_arima, col=2)
+
+forecast_arima_auto <- forecast(arima_auto)
+plot(forecast_arima_auto)
+
+
+# with seasonality
+arima_auto <- auto.arima(nasdaq_ts, seasonal = TRUE)
+summary(fit)
+
+fit_auto_arima <- fitted(fit)
+
+plot(nasdaq_ts)
+lines(fit_auto_arima, col=2)
+
+forecast_arima_auto <- forecast(arima_auto)
+plot(forecast_arima_auto)
+
 
 
 ########### ARIMAX #############
