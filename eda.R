@@ -259,6 +259,60 @@ calculate_plot_vif(subset(df, select = -c(DATE)), response_var)
 
 ## TODO: remove the high VIF variables
 
+library(forecast)
+
+########### ACF PACF ##############
+
+Acf(subset(df, select = response_var))
+Pacf(subset(df, select = response_var))
+# Every price is heavily dependent on the one next to it, lag = 1
+
+
+########### LM TREND+SEASON ###########
+# We convert the NASDAQ index to a timeseries data
+
+df$DATE <- as.Date(df$DATE)
+# Sort dataframe by date
+df <- df[order(df$DATE),]
+# Create the time series object
+nasdaq_price_ts <- ts(df$nasdaq_PRICE, start=c(year(min(df$DATE)), month(min(df$DATE))), frequency=12)
+
+plot(nasdaq_price_ts, main="NASDAQ Price over Time", ylab="Price", xlab="Time")
+
+# Decompose the time series into its trend, seasonal, and random components
+nasdaq_price_ts_decomposed <- stl(nasdaq_price_ts, s.window="periodic")
+# Four panels: 
+# 1 the original series
+# 2 the estimated trend component
+# 3 the estimated seasonal component
+# 4 the estimated irregular component
+plot(nasdaq_price_ts_decomposed)
+
+# Fit the Time Series Linear Model
+model <- tslm(nasdaq_price_ts ~ trend + season)
+summary(model)
+
+# Plot LM predictions
+fit<- fitted(model)
+plot(nasdaq_price_ts, main="NASDAQ Price over Time", ylab="Price", xlab="Time")
+lines(fitted(model), col=2)
+
+# Plot forecast
+forecast_lm <- forecast(model)
+plot(forecast_lm)
+lines(fitted(model), col=2)
+
+# Analysis of residuals
+res<- residuals(model) 
+plot(res) 
+Acf(res)
+# The plot seems to indicate a strong positive autocorrelation
+
+# The Durbin-Watson test statistic ranges from 0 to 4. 
+# A value of 2 means there is no autocorrelation in the sample, values < 2 suggest positive autocorrelation, and values > 2 suggest negative autocorrelation.
+
+dw<- dwtest(model, alt="two.sided")
+
 
 ########### ARIMA #############
 
