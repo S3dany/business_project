@@ -1,6 +1,6 @@
 install.packages("readxl")
-library(readxl)
 install.packages("lubridate")
+library(readxl)
 library(lubridate)
 
 # Possible correlations:
@@ -46,12 +46,45 @@ gdp <- read_excel("US-Monthly-GDP-History-Data.xlsx", sheet = "Data")
 colnames(gdp) <- c("DATE", "NOMINAL", "REAL")
 
 # SOURCE: https://www.usinflationcalculator.com/inflation/current-inflation-rates/
-inflation_rates <- read.csv("inflation_rates.csv")
+# inflation_rates <- read.csv("inflation_rates.csv")
 # monthly is seasonally adjusted
 # yearly is NOT seasonally adjusted
-colnames(inflation_rates) <- c("DATE", "MONTHLY", "YEARLY")
+#colnames(inflation_rates) <- c("DATE", "MONTHLY", "YEARLY")
 
-# SOURCE https://finance.yahoo.com/quote/%5EVIX/history?period1=1454284800&period2=1685577600&interval=1mo&filter=history&frequency=1mo&includeAdjustedClose=true
+# Read the excel file
+data <- read_excel("inflation_rates_larger.xlsx")
+
+
+# Convert all columns to numeric
+data[,-1] <- sapply(data[,-1], as.numeric)
+
+# Initialize an empty data frame to store the reshaped data
+data_long <- data.frame(DATE = as.Date(NA), YEARLY = as.numeric(NA))
+
+# Loop over all rows in the data
+for (i in 1:nrow(data)) {
+  # Loop over all months (columns 2 to 13)
+  for (j in 13:2) {
+    # Check if data is NA
+    if (!is.na(data[i, j])) {
+      # Append a new row to data_long
+      date_string <- paste(as.integer(data[i, 1]), names(data)[j])
+      date1 <- parse_date_time(date_string, orders = "YB")
+      formatted_date1 <- format(date1, "%Y-%m-%d")
+  
+      data_long <- rbind(data_long, data.frame(DATE = formatted_date1, YEARLY = as.numeric(data[i, j])))
+    }
+  }
+}
+
+# Remove the first row of data_long (which contains the NA values used for initialization)
+inflation_rates <- data_long[-1, ]
+
+inflation_rates
+
+
+
+# SOURCE https:/finance.yahoo.com/quote/%5EVIX/history?period1=1454284800&period2=1685577600&interval=1mo&filter=history&frequency=1mo&includeAdjustedClose=true
 vix <- read.csv("VIX.csv")
 vix <- vix[, -7]
 vix <- vix[, -6]
@@ -62,7 +95,7 @@ vix
 personal_saving$DATE <- as.Date(personal_saving$DATE)
 bank_credit$DATE <- as.Date(bank_credit$DATE)
 gdp$DATE <- as.Date(paste0(gdp$DATE, "-01"), format = "%Y - %b-%d")
-inflation_rates$DATE <- as.Date(paste0("01 ", inflation_rates$DATE), format = "%d %B %Y")
+inflation_rates$DATE <- as.Date(inflation_rates$DATE)
 
 # View the data
 head(personal_saving)
@@ -348,11 +381,11 @@ tsdisplay(residuals_arima)
 
 # no seasonality
 arima_auto <- auto.arima(nasdaq_ts, seasonal = FALSE)
-summary(fit)
+summary(arima_auto)
 
 # Seasonality seems to be 12
 
-fit_auto_arima <- fitted(fit)
+fit_auto_arima <- fitted(arima_auto)
 
 plot(nasdaq_ts)
 lines(fit_auto_arima, col=2)
@@ -363,9 +396,9 @@ plot(forecast_arima_auto)
 
 # with seasonality
 arima_auto <- auto.arima(nasdaq_ts, seasonal = TRUE)
-summary(fit)
+summary(arima_auto)
 
-fit_auto_arima <- fitted(fit)
+fit_auto_arima <- fitted(arima_auto)
 
 plot(nasdaq_ts)
 lines(fit_auto_arima, col=2)
@@ -376,6 +409,64 @@ plot(forecast_arima_auto)
 
 
 ########### ARIMAX #############
+# Select the eXogenous variables 
+# TODO: fix once figured out collinearity and added other vars
+exogenous_df = subset(df, select = c(DATE, inflation_rates_YEARLY, bank_credit_TOTBKCR, personal_saving_PSAVERT, gdp_REAL))
 
+arimax <- auto.arima(nasdaq_ts, xreg = as.matrix(subset(exogenous_df, select = -c(DATE))))
+summary(arimax)
+
+fit_arimax <- fitted(arimax)
+
+plot(nasdaq_ts)
+lines(fit_arimax, col=2)
+
+
+########## ARIMA AND ARIMAX FOR MARKET CRASH FORECAST ##########
+
+# Get the date of the peak
+max_price_index <- which.max(df$nasdaq_PRICE)
+breakpoint <- df$DATE[max_price_index]
+print(breakpoint)
+
+max_price <- df$nasdaq_PRICE[max_price_index]
+price_breakpoint <- which(nasdaq_ts == max_price)
+
+# Split the dataframes into two
+exogenous_train <- subset(exogenous_df, DATE <= breakpoint)
+exogenous_test <- subset(exogenous_df, DATE > breakpoint)
+
+nasdaq_train <- head(nasdaq_ts, price_breakpoint)
+nasdaq_test <- tail(nasdaq_ts, length(nasdaq_ts) - price_breakpoint)
+
+
+# Fit ARIMA
+arima_crash <- auto.arima(nasdaq_train, seasonal = TRUE)
+summary(arima_crash)
+
+fit_arima_crash <- fitted(arima_crash)
+
+plot(nasdaq_train)
+lines(fit_arima_crash, col=2)
+
+forecast_arima_crash <- forecast(arima_crash)
+plot(forecast_arima_crash)
+
+lines(nasdaq_test, col="red")
+
+# Fit ARIMAX
+
+arimax_crash <- auto.arima(nasdaq_train, xreg = as.matrix(subset(exogenous_train, select = -c(DATE))))
+summary(arimax_crash)
+
+fit_arimax_crash <- fitted(arimax_crash)
+
+plot(nasdaq_train)
+lines(fit_arimax_crash, col=2)
+
+forecast_arimax_crash <- forecast(arimax_crash, xreg = as.matrix(subset(exogenous_test, select = -c(DATE))))
+plot(forecast_arimax_crash)
+
+lines(nasdaq_test, col="red")
 
 ########### GAM #############
