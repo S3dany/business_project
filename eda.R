@@ -90,7 +90,7 @@ for (i in 1:nrow(data)) {
       date_string <- paste(as.integer(data[i, 1]), names(data)[j])
       date1 <- parse_date_time(date_string, orders = "YB")
       formatted_date1 <- format(date1, "%Y-%m-%d")
-  
+      
       data_long <- rbind(data_long, data.frame(DATE = formatted_date1, YEARLY = as.numeric(data[i, j])))
     }
   }
@@ -257,43 +257,101 @@ RS_Commercial <- extract_monthly_average(RS_Commercial, "DATE", "RHEACBW027SBOG"
 
 
 ######## EDA ##########
-customized_plot <- function(data, y_col, ylab) {
+customized_plot <- function(data, y_col, ylab, flag = FALSE, add_line = FALSE, nasdaq = -FALSE) {
   x_col <- "DATE"
   xlab <- "Date"
-  plot(data[[x_col]], data[[y_col]], type = "l", xlab = xlab, ylab = ylab, xaxt = "n")
+  
+  # Increase the right margin by adjusting the fourth element of the 'mar' parameter
+  par(mar = c(7, 5, 4, 6))  
+  
+  if(nasdaq){
+    # Find the maximum value, round up to the nearest 2000
+    max_y <- ceiling(max(data[[y_col]]) / 2000) * 2000
+  }else{
+    # Find the maximum value, round up to the nearest 2000
+    max_y <- max(data[[y_col]])
+  }
+  min_y <- min(data[[y_col]])
+  
+  # Put a 15% more space on top of the graph
+  ylims <- c(min_y, max_y * 1.15)
+  
+  plot(data[[x_col]], data[[y_col]], type = "l", xlab = "", ylab = "", xaxt = "n", yaxt = "n", ylim = ylims)
   axis(1, at = data[[x_col]], labels = format(data[[x_col]], "%b-%Y"), las = 2)
+  mtext(xlab, side = 1, line = 5)
+  
+  # Define the sequence for the y-axis
+  if (!nasdaq) {
+    y_ticks <- seq(from = min_y, to = max_y, length.out = 11)  # Including endpoints, length.out = 11 gives 10 intervals
+  } else {
+    y_ticks <- seq(from = 2000, to = max_y, by = 2000)
+  }
+  
+  
+  axis(2, at = y_ticks, las = 1, labels = ifelse(y_ticks > 100, as.character(round(y_ticks)), format(round(y_ticks, 3), nsmall = 3)))
+  
+  mtext(ylab, side = 2, line = 3.5)
+  
+  if (flag) {
+    max_index <- which.max(data[[y_col]])
+    max_value <- data[[y_col]][max_index]
+    max_date <- data[[x_col]][max_index]
+    points(max_date, max_value, col = "red", pch = 20)  
+    text(max_date, max_value, format(max_date, "%b-%Y"), pos = 1, col = "red")  
+    
+    # Add a dashed horizontal line at the maximum y value
+    abline(h = max_value, lty = "dashed", col = "red")
+    
+    # Add a text label at the y-axis, showing the maximum y value
+    text(min(data[[x_col]])-5, max_value, paste("      ", round(max_value, 2)), pos = 1, col = "red")
+  }
+  
+  if (add_line) {
+    march_2020_date <- as.Date("2020-03-01")
+    lines(c(march_2020_date, march_2020_date), c(min(data[[y_col]]), max(data[[y_col]])), lty = "dashed", col = "blue")
+    
+    # Place the legend outside the plot in the top right corner
+    legend("topright", legend = "March 2020 Crash", lty = "dashed", col = "blue")
+  }
 }
 
 
+# Plotting nasdaq
+customized_plot(nasdaq, "PRICE", "Nasdaq Index", FALSE, FALSE, nasdaq=TRUE)
+customized_plot(nasdaq, "PRICE", "Nasdaq Index", FALSE, TRUE, nasdaq=TRUE)
+customized_plot(nasdaq, "PRICE", "Nasdaq Index", TRUE, TRUE, nasdaq=TRUE)
+customized_plot(nasdaq, "PRICE", "Nasdaq Index", TRUE, FALSE, nasdaq=TRUE)
+
+
 # Plotting personal savings
-customized_plot(personal_saving, "PSAVERT", "Personal Savings")
+customized_plot(personal_saving, "PSAVERT", "Personal Savings", TRUE, TRUE)
 
 # Plotting bank credit
-customized_plot(bank_credit, "TOTBKCR", "Bank Credit Total")
+customized_plot(bank_credit, "TOTBKCR", "Bank Credit Total", TRUE, TRUE)
 
 # Plotting nominal gdp
 # customized_plot(gdp, "NOMINAL", "Nominal GDP")
 
 # Plotting real gdp
-customized_plot(gdp, "REAL", "Real GDP")
+customized_plot(gdp, "REAL", "Real GDP", TRUE, TRUE)
 
 # Plotting monthly inflation
 # customized_plot(inflation_rates, "MONTHLY", "Monthly Inflation Rate")
 
 # Plotting yearly inflation
-customized_plot(inflation_rates, "YEARLY", "Monthly Inflation Rate")
+customized_plot(inflation_rates, "YEARLY", "Monthly Inflation Rate", TRUE, TRUE)
 
 #VIX
-customized_plot(vix, "VIXCLS", "VIX Volatility Index")
+customized_plot(vix, "VIXCLS", "VIX Volatility Index", TRUE, TRUE)
 
 #Interest rate
-customized_plot(interest_rates, "FEDFUNDS", "Interest Rates")
+customized_plot(interest_rates, "FEDFUNDS", "Interest Rates", TRUE, TRUE)
 
-customized_plot(cpi, "CPALTT01USM657N", "CPI")
+customized_plot(cpi, "CPALTT01USM657N", "CPI", TRUE, TRUE)
 
-customized_plot(unemployment_rate, "UNRATE", "Unemployment Rate")
+customized_plot(unemployment_rate, "UNRATE", "Unemployment Rate", TRUE, TRUE)
 
-customized_plot(RS_Commercial, "RHEACBW027SBOG", "RS_Commercial")
+customized_plot(RS_Commercial, "RHEACBW027SBOG", "RS_Commercial", TRUE, TRUE)
 
 
 
@@ -339,11 +397,11 @@ plot_distribution <- function(df, var_name) {
     geom_histogram(aes(y=..density..), bins=30, fill="skyblue", alpha=0.5) +
     geom_density(color="darkblue", alpha=0.2) +
     ggtitle(paste('Histogram and Density Plot\n', var_name))
-
+  
   p2 <- ggplot(df, aes_string(var_name)) +
     geom_boxplot(fill="skyblue", alpha=0.5) +
     ggtitle(paste('Boxplot\n', var_name))
-
+  
   grid.arrange(p1, p2, ncol=2)
 }
 
@@ -408,13 +466,16 @@ calculate_plot_vif <- function(data, response_variable) {
   # Calculate VIF values
   vif_values <- vif(model)
   
-  # Plot VIF values
-  barplot(vif_values, main = "Variance Inflation Factors", 
-          ylab = "VIF Value", xlab = "Variable",
-          names.arg = names(vif_values), las = 2, col = "steelblue")
+  # Plot VIF values without names.arg
+  bp <- barplot(vif_values, main = "Variance Inflation Factors", 
+                ylab = "VIF Value", xlab = "", col = "steelblue", names.arg = "")
   
   # Add a horizontal line at VIF = 10
   abline(h = 3.5, col = "red", lwd = 2, lty = 2)
+  
+  # Add labels to the bars
+  text(x = bp, y = max(vif_values) / 2, labels = names(vif_values), srt = 90, adj = c(0.5, 0.5), xpd = TRUE, cex = 0.7)
+  
 }
 
 response_var <- "nasdaq_PRICE"
@@ -427,7 +488,11 @@ df$bank_credit_TOTBKCR <- NULL
 
 calculate_plot_vif(subset(df, select = -c(DATE)), response_var)
 
+df$unemployment_rate_UNRATE <- NULL
+calculate_plot_vif(subset(df, select = -c(DATE)), response_var)
 
+df$personal_saving_PSAVERT <- NULL
+calculate_plot_vif(subset(df, select = -c(DATE)), response_var)
 
 library(forecast)
 
@@ -532,15 +597,15 @@ plot(forecast_arima_auto)
 
 
 # with seasonality
-arima_auto <- auto.arima(nasdaq_ts, seasonal = TRUE)
-summary(arima_auto)
+arima_auto_seasonal <- auto.arima(nasdaq_ts, seasonal = TRUE)
+summary(arima_auto_seasonal)
 
-fit_auto_arima <- fitted(arima_auto)
+fit_auto_arima <- fitted(arima_auto_seasonal)
 
 plot(nasdaq_ts)
 lines(fit_auto_arima, col=2)
 
-forecast_arima_auto <- forecast(arima_auto)
+forecast_arima_auto <- forecast(arima_auto_seasonal)
 plot(forecast_arima_auto)
 
 
@@ -548,7 +613,7 @@ plot(forecast_arima_auto)
 ########### ARIMAX #############
 # Select the eXogenous variables 
 # TODO: fix once figured out collinearity and added other vars
-exogenous_df = subset(df, select = c(DATE, inflation_rates_YEARLY, bank_credit_TOTBKCR, personal_saving_PSAVERT, gdp_REAL))
+exogenous_df = subset(df, select = c(DATE, gdp_REAL, inflation_rates_YEARLY, vix_VIXCLS, interest_rates_FEDFUNDS, cpi_CPALTT01USM657N, RS_Commercial_RHEACBW027SBOG))
 
 arimax <- auto.arima(nasdaq_ts, xreg = as.matrix(subset(exogenous_df, select = -c(DATE))))
 summary(arimax)
@@ -557,6 +622,8 @@ fit_arimax <- fitted(arimax)
 
 plot(nasdaq_ts)
 lines(fit_arimax, col=2)
+
+
 
 
 ########## ARIMA AND ARIMAX FOR MARKET CRASH FORECAST ##########
@@ -613,7 +680,9 @@ lines(nasdaq_test, col="red")
 library(mgcv)
 
 # Fit a GAM model
-gam_model <- gam(nasdaq_PRICE ~ s(inflation_rates_YEARLY) + s(bank_credit_TOTBKCR) + s(personal_saving_PSAVERT) + s(gdp_REAL), data = df)
+#gam_model <- gam(nasdaq_PRICE ~ s(gdp_REAL) + s(inflation_rates_YEARLY) + s(vix_VIXCLS) + s(interest_rates_FEDFUNDS), s(cpi_CPALTT01USM657N), s(RS_Commercial_RHEACBW027SBOG), data = df)
+gam_model <- gam(nasdaq_PRICE ~ gdp_REAL + inflation_rates_YEARLY + vix_VIXCLS + interest_rates_FEDFUNDS + cpi_CPALTT01USM657N + RS_Commercial_RHEACBW027SBOG, data = exogenous_df)
+
 
 # Print the summary of the GAM model
 summary(gam_model)
