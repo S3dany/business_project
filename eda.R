@@ -1,19 +1,37 @@
-install.packages("readxl")
-install.packages("lubridate")
+# install.packages("readxl")
+# install.packages("lubridate")
+# install.packages("corrplot")
+# install.packages("car")
+# install.packages("forecast")
+# install.packages("lmtest")
+install.packages("gridExtra")
+install.packages("purrr")
+install.packages("dplyr")
+
+library(dplyr)
+
+
+
+
+library(purrr)
+
+
+
+library(lmtest)
 library(readxl)
 library(lubridate)
 
 # Possible correlations:
 # NOMINAL GDP to Inflation 
 
-setwd("~/Desktop/BUSINESS_DATA")
+# setwd("~/Desktop/BUSINESS_DATA")
 # list all dataframes for simplicity, needed later
-data_frames <- list("nasdaq", "personal_saving", "bank_credit", "gdp", "inflation_rates", "vix")
+data_frames <- list("nasdaq", "personal_saving", "bank_credit", "gdp", "inflation_rates", "vix", "interest_rates", "cpi", "unemployment_rate", "RS_Commercial")
 
 ####### IMPORT Y DATASET #########
 nasdaq <- read.csv("NASDAQ.csv")
-nasdaq <- subset(nasdaq, select = c(Date, Price, Vol.))
-colnames(nasdaq) <- c("DATE", "PRICE", "VOL")
+nasdaq <- subset(nasdaq, select = c(Date, Price))
+colnames(nasdaq) <- c("DATE", "PRICE")
 nasdaq$DATE <- as.Date(nasdaq$DATE, format = "%m/%d/%Y")
 nasdaq$PRICE <- as.numeric(gsub(",", "", nasdaq$PRICE))
 
@@ -33,7 +51,7 @@ convert_numeric <- function(value) {
   return(converted_value)
 }
 
-nasdaq$VOL <- sapply(nasdaq$VOL, convert_numeric)
+# nasdaq$VOL <- sapply(nasdaq$VOL, convert_numeric)
 
 ####### IMPORT PREDICTORS DATASET AND PREPARE #######
 
@@ -43,13 +61,14 @@ bank_credit <- read.csv("Bank Credit All Commercial Banks.csv")
 
 # SOURCE https://news.ihsmarkit.com/
 gdp <- read_excel("US-Monthly-GDP-History-Data.xlsx", sheet = "Data")
-colnames(gdp) <- c("DATE", "NOMINAL", "REAL")
+colnames(gdp) <- c("DATE", "REAL", "NOMINAL")
+gdp <- subset(gdp, select = c(DATE, REAL))
 
 # SOURCE: https://www.usinflationcalculator.com/inflation/current-inflation-rates/
 # inflation_rates <- read.csv("inflation_rates.csv")
-# monthly is seasonally adjusted
-# yearly is NOT seasonally adjusted
-#colnames(inflation_rates) <- c("DATE", "MONTHLY", "YEARLY")
+# # monthly is seasonally adjusted
+# # yearly is NOT seasonally adjusted
+# colnames(inflation_rates) <- c("DATE", "MONTHLY", "YEARLY")
 
 # Read the excel file
 data <- read_excel("inflation_rates_larger.xlsx")
@@ -79,23 +98,44 @@ for (i in 1:nrow(data)) {
 
 # Remove the first row of data_long (which contains the NA values used for initialization)
 inflation_rates <- data_long[-1, ]
-
 inflation_rates
 
 
 
 # SOURCE https:/finance.yahoo.com/quote/%5EVIX/history?period1=1454284800&period2=1685577600&interval=1mo&filter=history&frequency=1mo&includeAdjustedClose=true
-vix <- read.csv("VIX.csv")
-vix <- vix[, -7]
-vix <- vix[, -6]
-colnames(vix) <- c("DATE", "OPEN", "HIGH", "LOW", "CLOSE")
-vix$DATE = as.Date(vix$DATE)
+# source: https://fred.stlouisfed.org/series/VIXCLS
+vix <- read.csv("VIXCLS.csv")
+# vix <- vix[, -7]
+# vix <- vix[, -6]
+# colnames(vix) <- c("DATE", "OPEN", "HIGH", "LOW", "CLOSE")
+
 vix
+
+# interest rates source: https://fred.stlouisfed.org/series/FEDFUNDS#0
+interest_rates <- read.csv("FEDFUNDS.csv")
+interest_rates
+
+#CPI Consumer Price Index Total All Items for the United States
+cpi <- read.csv("Consumer Price Index Total All Items for the United States.csv")
+
+#Unemployment rate
+unemployment_rate <- read.csv("Unemployment Rate.csv")
+
+
+#Real Estate Loans Commercial Real Estate Loans All Commercial Banks
+RS_Commercial <- read.csv("Real Estate Loans Commercial Real Estate Loans All Commercial Banks.csv")
+
+
 
 personal_saving$DATE <- as.Date(personal_saving$DATE)
 bank_credit$DATE <- as.Date(bank_credit$DATE)
 gdp$DATE <- as.Date(paste0(gdp$DATE, "-01"), format = "%Y - %b-%d")
 inflation_rates$DATE <- as.Date(inflation_rates$DATE)
+vix$DATE <- as.Date(vix$DATE)
+interest_rates$DATE <- as.Date(interest_rates$DATE)
+cpi$DATE <- as.Date(cpi$DATE)
+unemployment_rate$DATE <- as.Date(unemployment_rate$DATE)
+RS_Commercial$DATE <- as.Date(RS_Commercial$DATE)
 
 # View the data
 head(personal_saving)
@@ -103,6 +143,12 @@ head(bank_credit)
 head(gdp)
 head(inflation_rates)
 head(vix)
+head(interest_rates)
+head(cpi)
+head(unemployment_rate)
+head(RS_Commercial)
+
+
 
 # PICK LAST 5 YEARS
 
@@ -112,11 +158,13 @@ print(max(bank_credit$DATE))
 print(max(gdp$DATE))
 print(max(inflation_rates$DATE))
 print(max(vix$DATE))
-
-
+print(max(interest_rates$DATE))
+print(max(cpi$DATE))
+print(max(unemployment_rate$DATE))
+print(max(RS_Commercial$DATE))
 
 data_frames_temp <- lapply(data_frames, function(df) {
-  df = get(df)
+  df <- get(df)
   df$DATE <- as.Date(df$DATE)
   return(df)
 })
@@ -136,8 +184,6 @@ end_date <- as.Date(end_date, origin = "1970-01-01")
 years_ago <- 20
 start_date <- as.Date(end_date - years(years_ago))
 
-
-
 subset_by_date <- function(data, start_date, end_date) {
   subset_data <- data[data$DATE >= start_date & data$DATE <= end_date, ]
   return(subset_data)
@@ -150,6 +196,10 @@ bank_credit <- subset_by_date(bank_credit, start_date, end_date)
 gdp <- subset_by_date(gdp, start_date, end_date)
 inflation_rates <- subset_by_date(inflation_rates, start_date, end_date)
 vix <- subset_by_date(vix, start_date, end_date)
+interest_rates <- subset_by_date(interest_rates, start_date, end_date)
+cpi <- subset_by_date(cpi, start_date, end_date)
+unemployment_rate <- subset_by_date(unemployment_rate, start_date, end_date)
+RS_Commercial <- subset_by_date(RS_Commercial, start_date, end_date)
 
 
 ######## TREAT MORE ROWS FOR THE SAME MONTH ########
@@ -202,6 +252,7 @@ bank_credit <- extract_monthly_average(bank_credit, "DATE", "TOTBKCR")
 
 nasdaq <- extract_monthly_average(nasdaq, "DATE", "PRICE")
 
+RS_Commercial <- extract_monthly_average(RS_Commercial, "DATE", "RHEACBW027SBOG")
 
 
 
@@ -221,19 +272,29 @@ customized_plot(personal_saving, "PSAVERT", "Personal Savings")
 customized_plot(bank_credit, "TOTBKCR", "Bank Credit Total")
 
 # Plotting nominal gdp
-customized_plot(gdp, "NOMINAL", "Nominal GDP")
+# customized_plot(gdp, "NOMINAL", "Nominal GDP")
 
 # Plotting real gdp
 customized_plot(gdp, "REAL", "Real GDP")
 
 # Plotting monthly inflation
-customized_plot(inflation_rates, "MONTHLY", "Monthly Inflation Rate")
+# customized_plot(inflation_rates, "MONTHLY", "Monthly Inflation Rate")
 
 # Plotting yearly inflation
 customized_plot(inflation_rates, "YEARLY", "Monthly Inflation Rate")
 
 #VIX
-customized_plot(vix, "CLOSE", "VIX Volatility Index")
+customized_plot(vix, "VIXCLS", "VIX Volatility Index")
+
+#Interest rate
+customized_plot(interest_rates, "FEDFUNDS", "Interest Rates")
+
+customized_plot(cpi, "CPALTT01USM657N", "CPI")
+
+customized_plot(unemployment_rate, "UNRATE", "Unemployment Rate")
+
+customized_plot(RS_Commercial, "RHEACBW027SBOG", "RS_Commercial")
+
 
 
 ###### BUILD DATAFRAME #######
@@ -256,10 +317,79 @@ print(merged_data)
 df <- merged_data
 
 
+
+######EDA#####
+
+# Histograms
+hist(df$nasdaq_PRICE, main = "NASDAQ Price", xlab = "Price")
+hist(df$interest_rates_FEDFUNDS, main = "Interest Rates", xlab = "Rate")
+
+# Boxplots
+boxplot(df$nasdaq_PRICE, main = "NASDAQ Price", xlab = "Price")
+boxplot(df$interest_rates_FEDFUNDS, main = "Interest Rates", xlab = "Rate")
+
+
+###### plot all##############
+library(ggplot2)
+library(gridExtra)
+
+# A function that generates a histogram, density plot, and boxplot for a variable
+plot_distribution <- function(df, var_name) {
+  p1 <- ggplot(df, aes_string(var_name)) +
+    geom_histogram(aes(y=..density..), bins=30, fill="skyblue", alpha=0.5) +
+    geom_density(color="darkblue", alpha=0.2) +
+    ggtitle(paste('Histogram and Density Plot\n', var_name))
+
+  p2 <- ggplot(df, aes_string(var_name)) +
+    geom_boxplot(fill="skyblue", alpha=0.5) +
+    ggtitle(paste('Boxplot\n', var_name))
+
+  grid.arrange(p1, p2, ncol=2)
+}
+
+# Get the names of all numeric variables
+num_vars <- names(df)[sapply(df, is.numeric)]
+
+# Loop through the numeric variables and plot them
+for (var in num_vars) {
+  plot_distribution(df, var)
+}
+
+# Select only numeric columns (excluding DATE)
+df_numeric <- df %>% select_if(~ is.numeric(.x) && !is.Date(.x))
+
+# Then perform Box-Cox transformation as before
+df_transformed <- df_numeric %>%
+  purrr::map_df(~ forecast::BoxCox(.x, lambda = forecast::BoxCox.lambda(.x)))
+
+# Now join the DATE column back with the transformed data frame
+df_final <- bind_cols(df["DATE"], df_transformed)
+
+# Loop through the numeric variables and plot them
+for (var in num_vars) {
+  plot_distribution(df_final, var)
+}# Select only numeric columns (excluding DATE)
+
+
+# df_numeric <- df %>% select_if(~ is.numeric(.x) && !is.Date(.x))
+#
+# # Apply the logarithmic transformation
+# df_transformed <- df_numeric %>%
+#   purrr::map_df(~ log(.x))
+#
+# # Now join the DATE column back with the transformed data frame
+# df_final <- bind_cols(df["DATE"], df_transformed)
+#
+# for (var in num_vars) {
+#   plot_distribution(df_final, var)
+# }# Select only numeric columns (excluding DATE)
+
+
 ######## CORRELATION ########
 # Load the corrplot package
 library(corrplot)
 
+df <- df_final
 # Calculate the correlation matrix
 cor_matrix <- cor(subset(df, select = -c(DATE)))
 
@@ -284,13 +414,20 @@ calculate_plot_vif <- function(data, response_variable) {
           names.arg = names(vif_values), las = 2, col = "steelblue")
   
   # Add a horizontal line at VIF = 10
-  abline(h = 10, col = "red", lwd = 2, lty = 2)
+  abline(h = 3.5, col = "red", lwd = 2, lty = 2)
 }
 
 response_var <- "nasdaq_PRICE"
 calculate_plot_vif(subset(df, select = -c(DATE)), response_var)
 
 ## TODO: remove the high VIF variables
+# we notice that gdp and bank credit showing high coolinearity so we will drop bank credit from the analysis
+df$bank_credit_TOTBKCR <- NULL
+
+
+calculate_plot_vif(subset(df, select = -c(DATE)), response_var)
+
+
 
 library(forecast)
 
@@ -470,3 +607,29 @@ plot(forecast_arimax_crash)
 lines(nasdaq_test, col="red")
 
 ########### GAM #############
+
+
+# Load the mgcv package
+library(mgcv)
+
+# Fit a GAM model
+gam_model <- gam(nasdaq_PRICE ~ s(inflation_rates_YEARLY) + s(bank_credit_TOTBKCR) + s(personal_saving_PSAVERT) + s(gdp_REAL), data = df)
+
+# Print the summary of the GAM model
+summary(gam_model)
+
+
+# Plot the GAM model
+plot(gam_model)
+
+
+# Plot the PDP for a specific predictor
+plot(gam_model, select = "inflation_rates_YEARLY")
+
+# Plot residuals against fitted values
+plot(gam_model, resid = TRUE)
+
+# Plot convergence diagnostics
+plot(gam_model, select = 1)
+
+
